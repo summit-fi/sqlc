@@ -7,6 +7,7 @@ import (
 	"github.com/sqlc-dev/sqlc/internal/config"
 	"github.com/sqlc-dev/sqlc/internal/source"
 	"github.com/sqlc-dev/sqlc/internal/sql/ast"
+	"github.com/sqlc-dev/sqlc/internal/sql/catalog"
 	"github.com/sqlc-dev/sqlc/internal/sql/named"
 	"github.com/sqlc-dev/sqlc/internal/sql/rewrite"
 	"github.com/sqlc-dev/sqlc/internal/sql/validate"
@@ -177,6 +178,12 @@ func (c *Compiler) _analyzeQuery(raw *ast.RawStmt, query string, failfast bool) 
 	if err := check(err); err != nil {
 		return nil, err
 	}
+
+	err = buildNullTables(embeds, c.catalog)
+	if err := check(err); err != nil {
+		return nil, err
+	}
+
 	cols, err := c.outputColumns(qc, raw.Stmt)
 	if err := check(err); err != nil {
 		return nil, err
@@ -204,4 +211,50 @@ func (c *Compiler) _analyzeQuery(raw *ast.RawStmt, query string, failfast bool) 
 		Query:      expanded,
 		Named:      namedParams,
 	}, rerr
+}
+
+func buildNullTables(embeds rewrite.EmbedSet, c *catalog.Catalog) error {
+	for _, emb := range embeds {
+		if !emb.Nullable {
+			continue
+		}
+
+		schema, table, err := c.GetSchemaTable(emb.Table)
+		if err != nil {
+			return err
+		}
+
+		emb.Table = &ast.TableName{
+			Catalog: table.Rel.Catalog,
+			Schema:  table.Rel.Schema,
+			Name:    "null_" + table.Rel.Name,
+		}
+
+		// skip if null table already exists
+		if table, _ := c.GetTable(emb.Table); table.Rel != nil {
+			continue
+		}
+
+		nullTable := &catalog.Table{
+			Rel:     emb.Table,
+			Columns: []*catalog.Column{},
+		}
+
+		for _, c := range table.Columns {
+			nullTable.Columns = append(nullTable.Columns, &catalog.Column{
+				Name:       c.Name,
+				Type:       c.Type,
+				IsNotNull:  false,
+				IsUnsigned: c.IsUnsigned,
+				IsArray:    c.IsArray,
+				ArrayDims:  c.ArrayDims,
+				Comment:    c.Comment,
+				Length:     c.Length,
+			})
+		}
+
+		schema.Tables = append(schema.Tables, nullTable)
+	}
+
+	return nil
 }
