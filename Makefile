@@ -1,4 +1,4 @@
-.PHONY: build build-endtoend test test-ci test-examples test-endtoend start psql mysqlsh proto
+.PHONY: sqlc-dev
 
 build:
 	go build ./...
