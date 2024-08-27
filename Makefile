@@ -1,4 +1,4 @@
-.PHONY: build build-endtoend test test-ci test-examples test-endtoend start psql mysqlsh proto
+.PHONY: sqlc-dev
 
 build:
 	go build ./...
@@ -24,7 +24,7 @@ build-endtoend:
 test-ci: test-examples build-endtoend vet
 
 sqlc-dev:
-	go build -o ~/bin/sqlc-dev ./cmd/sqlc/
+	go build -o ~/go/bin/sqlc-dev ./cmd/sqlc/
 
 sqlc-pg-gen:
 	go build -o ~/bin/sqlc-pg-gen ./internal/tools/sqlc-pg-gen
